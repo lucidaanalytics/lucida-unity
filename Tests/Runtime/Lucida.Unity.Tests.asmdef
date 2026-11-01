@@ -1,7 +1,7 @@
 {
   "name": "Lucida.Unity.Tests",
   "rootNamespace": "Lucida.Tests",
-  "references": ["Lucida.Unity"],
+  "references": ["Lucida.Unity", "UnityEngine.TestRunner"],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

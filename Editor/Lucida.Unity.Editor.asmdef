@@ -1,0 +1,14 @@
+{
+  "name": "Lucida.Unity.Editor",
+  "rootNamespace": "Lucida.Editor",
+  "references": ["Lucida.Unity"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

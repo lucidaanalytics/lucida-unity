@@ -197,7 +197,7 @@ namespace Lucida.Tests
         public void FailedSendResendsAFullSnapshotAndPauseAndSamplingStopCapture()
         {
             var lc = NewCore();
-            var rec = NewRecorder(lc);
+            var rec = NewRecorder(lc, new ReplayOptions { UseRemoteConfig = false }); // the first scripted answer is for the replay POST
             http.Script.Enqueue(new HttpResult(503));
             rec.Tick();
             clock.Now += 1000;
@@ -210,6 +210,49 @@ namespace Lucida.Tests
 
             var off = NewRecorder(NewCore(), new ReplayOptions { SampleRate = 0 });
             off.Tick();
+            Assert.AreEqual(0, ReplayRequests().Count);
+        }
+
+        [Test]
+        public void RemoteConfigCanOnlyTightenAndAKillSwitchStopsRecording()
+        {
+            var lc = NewCore();
+            http.Script.Enqueue(new HttpResult(200, "{\"session_recording\":false}"));
+            var rec = NewRecorder(lc);
+            rec.Tick();
+            Assert.AreEqual(0, ReplayRequests().Count, "killed project sends nothing");
+            Assert.AreEqual(1, http.Requests.Count(r => r.Url.Contains("/v1/config?api_key=lc_pk_x")));
+            clock.Now += 1000;
+            rec.Tick();
+            Assert.AreEqual(1, http.Requests.Count(r => r.Url.Contains("/v1/config")), "config is fetched once");
+        }
+
+        [Test]
+        public void MinDurationHoldsChunksAndLinkedFlagAndScreensGate()
+        {
+            var lc = NewCore();
+            var rec = NewRecorder(lc, new ReplayOptions { UseRemoteConfig = false, MinDurationMs = 3000 });
+            rec.Tick();
+            Assert.AreEqual(0, ReplayRequests().Count, "held until the session was recorded long enough");
+            source.Snap = Screen("Lobby", "Changed");
+            clock.Now += 4000;
+            rec.Tick();
+            Assert.AreEqual(2, ReplayRequests().Count, "held chunk and the new one go out together");
+
+            var flagOn = false;
+            var linked = new ReplayRecorder(NewCore(), new FakeSource { Snap = Screen("Lobby") }, new ReplayOptions { UseRemoteConfig = false, LinkedFlag = "rec" }, k => flagOn);
+            linked.Tick();
+            Assert.AreEqual(0, ReplayRequests().Count, "flag off: nothing recorded");
+            flagOn = true;
+            clock.Now += 1000;
+            linked.Tick();
+            Assert.AreEqual(1, ReplayRequests().Count);
+
+            var denied = NewRecorder(NewCore(), new ReplayOptions { UseRemoteConfig = false, ScreenDenyList = new[] { "Lobby" } });
+            denied.Tick();
+            Assert.AreEqual(0, ReplayRequests().Count, "deny list wins");
+            var notAllowed = NewRecorder(NewCore(), new ReplayOptions { UseRemoteConfig = false, ScreenAllowList = new[] { "Shop" } });
+            notAllowed.Tick();
             Assert.AreEqual(0, ReplayRequests().Count);
         }
 

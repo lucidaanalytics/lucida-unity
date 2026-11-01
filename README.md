@@ -25,13 +25,27 @@ if (LucidaSdk.IsEnabled("new-shop")) { /* ... */ }
   needs analytics and replay consent before the UI is read. Text and input values are starred and images are marked
   masked by default (`ReplayOptions.Mask` turns that off); passwords are always starred. `UnityWireframeSource` walks
   every root uGUI Canvas (Text, InputField, Button, Image, plus TextMeshPro by reflection); add `LucidaReplayUnmask`
-  or `LucidaReplayBlock` to a GameObject to unmask it or blank it out. 3D scenes are not captured, and taps are read
-  from the legacy Input Manager.
+  or `LucidaReplayBlock` to a GameObject to unmask it or blank it out. Visible 3D objects (enabled Renderers seen by
+  `Camera.main`, `ReplayOptions.CaptureScene`, at most `MaxSceneNodes`, nearest first) are drawn behind the UI as empty
+  named boxes; `TextMesh` and 3D TextMeshPro text is starred like UI text, and the same two components apply. Taps come from the
+  legacy Input Manager or, when only the new Input System is active, from its primary pointer (read by reflection, so
+  the package stays optional). The recorder also honours the project's remote replay settings (`GET /v1/config`: kill
+  switch, sample rate and minimum duration, tightening only; `ReplayOptions.UseRemoteConfig`), `MinDurationMs`
+  (chunks are held until the session reached it), `LinkedFlag` (record only while the flag is on) and
+  `ScreenAllowList` / `ScreenDenyList` (matched against `LucidaSdk.Screen` names).
 
 Tests: `Tests/Runtime` (core, async/lifecycle, replay) runs in the Unity Test Runner (NUnit). Without Unity: `cd Tests.Core && dotnet test` compiles
 `Runtime/Core` and the same tests plus the shared flag vectors from the repo's `testdata/flags`.
-Unity generates `.meta` files on first import; they are not committed here.
-The `Runtime/Unity` glue has not been compiled here (no Unity Editor on the build host).
+`Tests/Editor` (EditMode) covers the engine glue: uGUI capture and masking, 3D projection, block/mask of scene
+objects and the settings. Unity generates `.meta` files on first import; they are not committed here.
+
+Project Settings > Lucida (the `Editor` assembly) edits `Assets/Resources/LucidaSettings.asset`: key, host, consent
+mode, replay; with "Start before the first scene" the SDK initializes itself, no bootstrap script needed.
+
+CI (`lucida-unity`): the core tests run with `dotnet test` on every push. The `editor` job runs the Unity Test Runner
+(EditMode + PlayMode) and a Linux player build with game-ci in a throwaway project that references this package,
+once the `UNITY_LICENSE` (the .ulf file contents), `UNITY_EMAIL` and `UNITY_PASSWORD` secrets are set (see
+https://game.ci/docs/github/activation); without them it prints a notice and passes.
 
 ---
 

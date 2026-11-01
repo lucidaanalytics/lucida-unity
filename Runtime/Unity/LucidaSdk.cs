@@ -21,7 +21,7 @@ namespace Lucida
             Replay.Tick();
         }
 
-        // Legacy Input Manager only; with the new Input System alone this throws and taps are skipped.
+        // Tries the legacy Input Manager, then the new Input System (read by reflection so the package stays optional).
         static bool TapDown(out Vector3 p)
         {
             p = default;
@@ -31,7 +31,7 @@ namespace Lucida
                 p = Input.mousePosition;
                 return true;
             }
-            catch (InvalidOperationException) { return false; }
+            catch (InvalidOperationException) { return InputSystemTap.TapDown(out p); }
         }
 
         void OnApplicationPause(bool paused) { if (Life != null) Life.OnPause(paused); }
@@ -88,7 +88,7 @@ namespace Lucida
             driver.Core = core;
             driver.Life = new Lifecycle(core);
             if (o.CaptureAppLifecycle) driver.Life.Start();
-            if (o.SessionReplay) driver.Replay = new ReplayRecorder(core, new UnityWireframeSource(), o.Replay);
+            if (o.SessionReplay) driver.Replay = new ReplayRecorder(core, new UnityWireframeSource(o.Replay.CaptureScene, o.Replay.MaxSceneNodes), o.Replay, k => flags != null && flags.IsEnabled(k));
             flags = new Flags(core, o.FlagDefinitions,
                 new Dictionary<string, object>
                 {

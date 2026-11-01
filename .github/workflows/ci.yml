@@ -12,18 +12,100 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The Unity editor is not available on free runners, so this checks what runs without it: the UPM manifest
-      # and the engine-free core (Runtime/Core) with its NUnit tests, as a plain C# project.
+      # Engine-free checks that always run: the UPM manifest and the engine-free core (Runtime/Core) with its NUnit
+      # tests, as a plain C# project.
       - name: UPM manifest
         run: |
           python3 - <<'PY'
           import json, os
           p = json.load(open("package.json"))
           assert p["name"] and p["version"] and p["unity"], "package.json needs name, version and unity"
-          assert os.path.isfile("Runtime/Lucida.Unity.asmdef"), "missing Runtime/Lucida.Unity.asmdef"
+          for a in ("Runtime/Lucida.Unity.asmdef", "Editor/Lucida.Unity.Editor.asmdef", "Tests/Editor/Lucida.Unity.Editor.Tests.asmdef"):
+              assert os.path.isfile(a), "missing " + a
+              json.load(open(a))
           PY
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
       - run: dotnet test
         working-directory: Tests.Core~
+
+  # The real Unity Editor (game-ci, MIT): EditMode + PlayMode tests and a Linux player build of a throwaway project
+  # that references this package. Needs a Unity licence: add the UNITY_LICENSE (contents of the .ulf file),
+  # UNITY_EMAIL and UNITY_PASSWORD repository secrets. Without them the job only prints a notice.
+  editor:
+    runs-on: ubuntu-latest
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      UNITY_VERSION: 2022.3.62f1
+    steps:
+      - name: Unity licence
+        id: gate
+        run: |
+          if [ -z "$UNITY_LICENSE" ] || [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ]; then
+            echo "::notice title=Unity Editor skipped::add the UNITY_LICENSE, UNITY_EMAIL and UNITY_PASSWORD secrets to run the Unity Test Runner and the player build"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: package
+      - name: Throwaway Unity project
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          mkdir -p project/Assets/Editor project/Packages project/ProjectSettings
+          echo "m_EditorVersion: $UNITY_VERSION" > project/ProjectSettings/ProjectVersion.txt
+          cat > project/Packages/manifest.json <<'JSON'
+          {
+            "dependencies": {
+              "dev.lucida.sdk": "file:../../package",
+              "com.unity.test-framework": "1.1.33",
+              "com.unity.ugui": "1.0.0",
+              "com.unity.modules.physics": "1.0.0",
+              "com.unity.modules.ui": "1.0.0",
+              "com.unity.modules.unitywebrequest": "1.0.0",
+              "com.unity.modules.imgui": "1.0.0"
+            },
+            "testables": ["dev.lucida.sdk"]
+          }
+          JSON
+          # A build method that needs no scene in the project: it makes one that starts the SDK, then builds it.
+          cat > project/Assets/Editor/LucidaCiBuild.cs <<'CS'
+          using UnityEditor;
+          using UnityEditor.SceneManagement;
+          using UnityEngine;
+
+          public static class LucidaCiBuild
+          {
+              public static void Build()
+              {
+                  var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects);
+                  EditorSceneManager.SaveScene(scene, "Assets/Ci.unity");
+                  var report = BuildPipeline.BuildPlayer(new[] { "Assets/Ci.unity" }, "build/lucida-ci", BuildTarget.StandaloneLinux64, BuildOptions.None);
+                  Debug.Log("Lucida CI build: " + report.summary.result);
+                  EditorApplication.Exit(report.summary.result == UnityEditor.Build.Reporting.BuildResult.Succeeded ? 0 : 1);
+              }
+          }
+          CS
+      - name: Unity Test Runner (EditMode + PlayMode)
+        if: steps.gate.outputs.run == 'true'
+        uses: game-ci/unity-test-runner@fa6ced25861c16ef56187828c43f76d00df43a23 # v4.3.2
+        with:
+          projectPath: project
+          unityVersion: ${{ env.UNITY_VERSION }}
+          testMode: all
+          artifactsPath: test-results
+      - name: Player build (StandaloneLinux64)
+        if: steps.gate.outputs.run == 'true'
+        uses: game-ci/unity-builder@eb1b9fba120c6e62c9fb7a7a81d6c107ce004c45 # v6.0.0
+        with:
+          projectPath: project
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: StandaloneLinux64
+          buildMethod: LucidaCiBuild.Build
+          versioning: None
+          allowDirtyBuild: true

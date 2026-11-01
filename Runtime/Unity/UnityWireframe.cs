@@ -15,16 +15,26 @@ namespace Lucida
     /// <summary>
     /// <see cref="IWireframeSource"/> over uGUI: every active root Canvas, walked through its RectTransforms.
     /// TextMeshPro is read by type name and reflection so the package needs no TMP dependency.
-    /// The screen name is the active scene's name.
+    /// The screen name is the active scene's name. With <c>captureScene</c>, visible 3D objects seen by
+    /// <c>Camera.main</c> are drawn first (behind the UI), see <see cref="UnitySceneWireframe"/>.
     /// </summary>
     public sealed class UnityWireframeSource : IWireframeSource
     {
         readonly Vector3[] corners = new Vector3[4];
+        readonly bool captureScene;
+        readonly int maxSceneNodes;
+
+        public UnityWireframeSource(bool captureScene = true, int maxSceneNodes = 200)
+        {
+            this.captureScene = captureScene;
+            this.maxSceneNodes = maxSceneNodes;
+        }
 
         public WireSnapshot Capture()
         {
             int w = UnityEngine.Screen.width, h = UnityEngine.Screen.height;
             var root = new WireNode { Kind = WireKind.Container, Width = w, Height = h, Name = "screen" };
+            if (captureScene) root.Children.AddRange(UnitySceneWireframe.Capture(Camera.main, w, h, maxSceneNodes));
             foreach (var canvas in Object.FindObjectsOfType<Canvas>())
             {
                 if (!canvas.isRootCanvas || !canvas.enabled || !canvas.gameObject.activeInHierarchy) continue;

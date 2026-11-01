@@ -1,0 +1,29 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+env:
+  LUCIDA_TESTDATA: ${{ github.workspace }}/testdata~ # ~ keeps Unity from importing the vectors
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The Unity editor is not available on free runners, so this checks what runs without it: the UPM manifest
+      # and the engine-free core (Runtime/Core) with its NUnit tests, as a plain C# project.
+      - name: UPM manifest
+        run: |
+          python3 - <<'PY'
+          import json, os
+          p = json.load(open("package.json"))
+          assert p["name"] and p["version"] and p["unity"], "package.json needs name, version and unity"
+          assert os.path.isfile("Runtime/Lucida.Unity.asmdef"), "missing Runtime/Lucida.Unity.asmdef"
+          PY
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test
+        working-directory: Tests.Core~

@@ -1,0 +1,15 @@
+{
+  "name": "dev.lucida.sdk",
+  "displayName": "Lucida",
+  "version": "0.1.0",
+  "unity": "2021.3",
+  "description": "Lucida product analytics and feature flags SDK for Unity: consent-gated events, batched delivery, local and remote flag evaluation.",
+  "keywords": ["analytics", "feature-flags", "lucida"],
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "https://github.com/lucidaanalytics/lucida-unity.git" },
+  "documentationUrl": "https://github.com/lucidaanalytics/lucida-unity#readme",
+  "licensesUrl": "https://github.com/lucidaanalytics/lucida-unity/blob/main/LICENSE",
+  "author": { "name": "Lucida", "url": "https://github.com/lucidaanalytics" },
+  "dependencies": { "com.unity.ugui": "1.0.0" },
+  "samples": []
+}

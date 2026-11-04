@@ -143,6 +143,22 @@ namespace Lucida.Tests
         }
 
         [Test]
+        public void StoredQueueIsSegmented()
+        {
+            var lc = NewCore(flushAt: 1000);
+            for (var i = 0; i < 120; i++) lc.Capture("e" + i);
+            Assert.AreEqual("{\"segs\":3}", store.Get("lc_queue"));
+            Assert.IsNotNull(store.Get("lc_queue.2"));
+            Assert.IsNull(store.Get("lc_queue.3"));
+            Assert.AreEqual(120, NewCore(flushAt: 1000).Queue.Count);
+            store.Set("lc_queue.1", "torn");
+            Assert.AreEqual(70, NewCore(flushAt: 1000).Queue.Count); // only the torn segment is lost
+            store.Set("lc_queue", "[{\"event\":\"old\"}]");
+            Assert.AreEqual(1, NewCore(flushAt: 1000).Queue.Count); // the pre-segment layout migrates
+            Assert.AreEqual("{\"segs\":1}", store.Get("lc_queue"));
+        }
+
+        [Test]
         public void OptInProjectWritesNothingBeforeConsent()
         {
             var lc = NewCore(ConsentMode.OptIn);

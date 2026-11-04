@@ -18,12 +18,15 @@ namespace Lucida
     /// Persistent batching queue, single-threaded: the host calls <see cref="Tick"/> every frame. Flushes at N events or
     /// T ms, retries with backoff, drops oldest when full. Items are mirrored to the store and removed only once the
     /// server acknowledges them (at-least-once; the event uuid dedupes server-side).
-    /// shortcut: rewrites the whole JSON list on every enqueue (O(n), n &lt;= MaxQueueSize); use an append log if profiling says so.
+    /// Storage layout: <c>lc_queue</c> is the index (<c>{"segs":n}</c>), <c>lc_queue.i</c> holds segment i (up to
+    /// <see cref="SegmentSize"/> events). An enqueue rewrites only the last segment; an acknowledged batch or a drop of
+    /// the oldest re-segments from the head.
     /// </summary>
     public sealed class EventQueue
     {
         const string Key = "lc_queue";
         const int MaxBatch = 1000;
+        public const int SegmentSize = 50;
 
         readonly IHttp http;
         readonly IKeyValueStore store;
@@ -46,21 +49,71 @@ namespace Lucida
             this.clock = clock;
             this.cfg = cfg;
             this.onDrop = onDrop ?? ((_, __) => { });
+            Load();
+        }
+
+        void Load()
+        {
             var raw = store.Get(Key);
             if (raw == null) return;
             try
             {
-                var saved = Json.Parse(raw) as List<object>;
-                if (saved != null) items.AddRange(saved);
+                var parsed = Json.Parse(raw);
+                var legacy = parsed as List<object>;
+                if (legacy != null)
+                {
+                    // the pre-segment layout: one JSON list under lc_queue
+                    items.AddRange(legacy);
+                    PersistAll();
+                    return;
+                }
+                var index = parsed as Dictionary<string, object>;
+                var n = Convert.ToInt32(index["segs"]);
+                for (var i = 0; i < n; i++)
+                {
+                    var seg = store.Get(Key + "." + i);
+                    if (seg == null) continue;
+                    try
+                    {
+                        var saved = Json.Parse(seg) as List<object>;
+                        if (saved != null) items.AddRange(saved);
+                    }
+                    catch (Exception) { /* a torn segment loses only itself */ }
+                }
+                segs = n;
             }
-            catch (Exception) { /* corrupt queue file: start empty */ }
+            catch (Exception) { /* corrupt index: start empty */ }
         }
 
         public int Count { get { return items.Count; } }
 
-        void Persist()
+        int segs; // segments currently in the store
+
+        int SegCount { get { return (items.Count + SegmentSize - 1) / SegmentSize; } }
+
+        /// <summary>Rewrites every segment from the head (after items left the front) and drops stale ones.</summary>
+        void PersistAll()
         {
-            if (items.Count == 0) store.Remove(Key); else store.Set(Key, Json.Serialize(items));
+            var n = SegCount;
+            for (var i = 0; i < n; i++)
+                store.Set(Key + "." + i, Json.Serialize(items.GetRange(i * SegmentSize, Math.Min(SegmentSize, items.Count - i * SegmentSize))));
+            for (var i = n; i < segs; i++) store.Remove(Key + "." + i);
+            segs = n;
+            if (n == 0) store.Remove(Key);
+            else store.Set(Key, "{\"segs\":" + n + "}");
+        }
+
+        /// <summary>After an append only the last segment changed.</summary>
+        void PersistTail()
+        {
+            var n = SegCount;
+            var from = (n - 1) * SegmentSize;
+            store.Set(Key + "." + (n - 1), Json.Serialize(items.GetRange(from, items.Count - from)));
+            if (n != segs)
+            {
+                segs = n;
+                store.Set(Key, "{\"segs\":" + n + "}");
+            }
         }
 
         public void Enqueue(Dictionary<string, object> e)
@@ -73,8 +126,9 @@ namespace Lucida
                 var dropped = items.GetRange(0, n);
                 items.RemoveRange(0, n);
                 onDrop(dropped, "queue_full");
+                PersistAll();
             }
-            Persist();
+            else PersistTail();
             if (items.Count >= cfg.FlushAt) Flush();
             else if (dueAt == 0) dueAt = clock.NowMs() + cfg.FlushIntervalMs;
         }
@@ -153,7 +207,7 @@ namespace Lucida
         void RemoveSent(int n)
         {
             items.RemoveRange(0, Math.Min(n, items.Count));
-            Persist();
+            PersistAll();
         }
 
         /// <summary>Consent revoked: send what is queued (it includes $opt_out), then delete the rest.</summary>
@@ -168,7 +222,7 @@ namespace Lucida
         {
             epoch++;
             items.Clear();
-            store.Remove(Key);
+            PersistAll();
             dueAt = 0;
             attempt = 0;
         }

@@ -6,7 +6,7 @@ namespace Lucida
     public sealed class CoreConfig
     {
         public string ApiKey = "";
-        public string ApiHost = "https://app.lucida.dev";
+        public string ApiHost = "https://capture.lucidace.com";
         public IHttp Http;
         /// <summary>Real persistence; the core gates it so nothing is written before consent.</summary>
         public IKeyValueStore Store;

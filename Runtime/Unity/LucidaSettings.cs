@@ -13,7 +13,7 @@ namespace Lucida
         public const string ResourceName = "LucidaSettings";
 
         public string ApiKey = "";
-        public string Host = "https://app.lucida.dev";
+        public string Host = "https://capture.lucidace.com";
         public ConsentMode ConsentMode = ConsentMode.OptOut;
         public bool AutoInit;
         public bool SessionReplay;

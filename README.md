@@ -1,9 +1,20 @@
 # Lucida for Unity
 
-UPM package `dev.lucida.sdk` (Unity 2021.3+). Add by git URL pointing at `sdks/unity`, or copy the folder into `Packages/`.
+UPM package `dev.lucida.sdk` (Unity 2021.3+). 
+
+## Install
+
+From GitHub, [lucidaanalytics/lucida-unity](https://github.com/lucidaanalytics/lucida-unity), release `v0.1.0`: Package Manager, Add package from git URL:
+
+```
+https://github.com/lucidaanalytics/lucida-unity.git#v0.1.0
+```
+
+Or add `"dev.lucida.sdk": "https://github.com/lucidaanalytics/lucida-unity.git#v0.1.0"` to `Packages/manifest.json`. The release also attaches the package as a zip. A registry install (OpenUPM) is coming.
+
 
 ```csharp
-LucidaSdk.Init(new LucidaOptions { ApiKey = "lc_pk_...", Host = "https://app.lucida.dev",
+LucidaSdk.Init(new LucidaOptions { ApiKey = "lc_pk_...", Host = "https://capture.lucidace.com",
                                    ConsentMode = ConsentMode.OptIn });
 LucidaSdk.OptIn();                       // consent first: nothing is written to PlayerPrefs before it
 LucidaSdk.Capture("level_complete", new Dictionary<string, object> { { "level", 3 } });

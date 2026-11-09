@@ -44,7 +44,7 @@ namespace Lucida
     public sealed class LucidaOptions
     {
         public string ApiKey = "";
-        public string Host = "https://app.lucida.dev";
+        public string Host = "https://capture.lucidace.com";
         public ConsentMode ConsentMode = ConsentMode.OptOut;
         public bool QueueBeforeConsent;
         /// <summary>Bootstrap definitions (the "flags" array of /v1/flags/definitions) for local evaluation.</summary>
